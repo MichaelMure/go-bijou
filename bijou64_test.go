@@ -295,12 +295,12 @@ func benchEncode(b *testing.B, values []uint64) {
 	}
 }
 
-func BenchmarkEncodeTiny(b *testing.B)    { benchEncode(b, tinyValues()) }
-func BenchmarkEncodeSmall(b *testing.B)   { benchEncode(b, smallValues()) }
-func BenchmarkEncodeMedium(b *testing.B)  { benchEncode(b, mediumValues()) }
-func BenchmarkEncodeLarge(b *testing.B)   { benchEncode(b, largeValues()) }
+func BenchmarkEncodeTiny(b *testing.B)     { benchEncode(b, tinyValues()) }
+func BenchmarkEncodeSmall(b *testing.B)    { benchEncode(b, smallValues()) }
+func BenchmarkEncodeMedium(b *testing.B)   { benchEncode(b, mediumValues()) }
+func BenchmarkEncodeLarge(b *testing.B)    { benchEncode(b, largeValues()) }
 func BenchmarkEncodeBoundary(b *testing.B) { benchEncode(b, boundaryValues()) }
-func BenchmarkEncodeUniform(b *testing.B) { benchEncode(b, uniformValues()) }
+func BenchmarkEncodeUniform(b *testing.B)  { benchEncode(b, uniformValues()) }
 
 // ---------------------------------------------------------------------------
 // Decode benchmarks — random access via pre-computed offsets; matches
@@ -320,12 +320,12 @@ func benchDecode(b *testing.B, values []uint64) {
 	_ = sum
 }
 
-func BenchmarkDecodeTiny(b *testing.B)    { benchDecode(b, tinyValues()) }
-func BenchmarkDecodeSmall(b *testing.B)   { benchDecode(b, smallValues()) }
-func BenchmarkDecodeMedium(b *testing.B)  { benchDecode(b, mediumValues()) }
-func BenchmarkDecodeLarge(b *testing.B)   { benchDecode(b, largeValues()) }
+func BenchmarkDecodeTiny(b *testing.B)     { benchDecode(b, tinyValues()) }
+func BenchmarkDecodeSmall(b *testing.B)    { benchDecode(b, smallValues()) }
+func BenchmarkDecodeMedium(b *testing.B)   { benchDecode(b, mediumValues()) }
+func BenchmarkDecodeLarge(b *testing.B)    { benchDecode(b, largeValues()) }
 func BenchmarkDecodeBoundary(b *testing.B) { benchDecode(b, boundaryValues()) }
-func BenchmarkDecodeUniform(b *testing.B) { benchDecode(b, uniformValues()) }
+func BenchmarkDecodeUniform(b *testing.B)  { benchDecode(b, uniformValues()) }
 
 // ---------------------------------------------------------------------------
 // Stream decode benchmarks — sequential decode advancing through the buffer;
@@ -347,12 +347,39 @@ func benchStreamDecode(b *testing.B, values []uint64) {
 	_ = sum
 }
 
-func BenchmarkStreamDecodeTiny(b *testing.B)    { benchStreamDecode(b, tinyValues()) }
-func BenchmarkStreamDecodeSmall(b *testing.B)   { benchStreamDecode(b, smallValues()) }
-func BenchmarkStreamDecodeMedium(b *testing.B)  { benchStreamDecode(b, mediumValues()) }
-func BenchmarkStreamDecodeLarge(b *testing.B)   { benchStreamDecode(b, largeValues()) }
+func BenchmarkStreamDecodeTiny(b *testing.B)     { benchStreamDecode(b, tinyValues()) }
+func BenchmarkStreamDecodeSmall(b *testing.B)    { benchStreamDecode(b, smallValues()) }
+func BenchmarkStreamDecodeMedium(b *testing.B)   { benchStreamDecode(b, mediumValues()) }
+func BenchmarkStreamDecodeLarge(b *testing.B)    { benchStreamDecode(b, largeValues()) }
 func BenchmarkStreamDecodeBoundary(b *testing.B) { benchStreamDecode(b, boundaryValues()) }
-func BenchmarkStreamDecodeUniform(b *testing.B) { benchStreamDecode(b, uniformValues()) }
+func BenchmarkStreamDecodeUniform(b *testing.B)  { benchStreamDecode(b, uniformValues()) }
+
+// ---------------------------------------------------------------------------
+// DecodeU64 stream benchmarks — same loop as benchStreamDecode but through
+// the io.Reader interface rather than direct slice access.
+// ---------------------------------------------------------------------------
+
+func benchStreamDecodeU64(b *testing.B, values []uint64) {
+	buf, _ := preEncode(values)
+	r := bytes.NewReader(buf)
+	var sum uint64
+	for b.Loop() {
+		r.Seek(0, 0)
+		sum = 0
+		for r.Len() > 0 {
+			v, _ := bijou64.DecodeU64(r)
+			sum += v
+		}
+	}
+	_ = sum
+}
+
+func BenchmarkStreamDecodeU64Tiny(b *testing.B)     { benchStreamDecodeU64(b, tinyValues()) }
+func BenchmarkStreamDecodeU64Small(b *testing.B)    { benchStreamDecodeU64(b, smallValues()) }
+func BenchmarkStreamDecodeU64Medium(b *testing.B)   { benchStreamDecodeU64(b, mediumValues()) }
+func BenchmarkStreamDecodeU64Large(b *testing.B)    { benchStreamDecodeU64(b, largeValues()) }
+func BenchmarkStreamDecodeU64Boundary(b *testing.B) { benchStreamDecodeU64(b, boundaryValues()) }
+func BenchmarkStreamDecodeU64Uniform(b *testing.B)  { benchStreamDecodeU64(b, uniformValues()) }
 
 // ---------------------------------------------------------------------------
 // Encoded size benchmarks — matches Rust's bench_encoded_size.
@@ -369,9 +396,9 @@ func benchEncodedLen(b *testing.B, values []uint64) {
 	_ = total
 }
 
-func BenchmarkEncodedLenTiny(b *testing.B)    { benchEncodedLen(b, tinyValues()) }
-func BenchmarkEncodedLenSmall(b *testing.B)   { benchEncodedLen(b, smallValues()) }
-func BenchmarkEncodedLenMedium(b *testing.B)  { benchEncodedLen(b, mediumValues()) }
-func BenchmarkEncodedLenLarge(b *testing.B)   { benchEncodedLen(b, largeValues()) }
+func BenchmarkEncodedLenTiny(b *testing.B)     { benchEncodedLen(b, tinyValues()) }
+func BenchmarkEncodedLenSmall(b *testing.B)    { benchEncodedLen(b, smallValues()) }
+func BenchmarkEncodedLenMedium(b *testing.B)   { benchEncodedLen(b, mediumValues()) }
+func BenchmarkEncodedLenLarge(b *testing.B)    { benchEncodedLen(b, largeValues()) }
 func BenchmarkEncodedLenBoundary(b *testing.B) { benchEncodedLen(b, boundaryValues()) }
-func BenchmarkEncodedLenUniform(b *testing.B) { benchEncodedLen(b, uniformValues()) }
+func BenchmarkEncodedLenUniform(b *testing.B)  { benchEncodedLen(b, uniformValues()) }
