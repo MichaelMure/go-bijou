@@ -95,6 +95,64 @@ func TestDecodeExactConsumption(t *testing.T) {
 	}
 }
 
+func TestDecodeBytesVectors(t *testing.T) {
+	for _, v := range testVectors {
+		got, n, err := bijou64.DecodeBytes(v.enc)
+		if err != nil {
+			t.Errorf("DecodeBytes(%X) error: %v", v.enc, err)
+			continue
+		}
+		if got != v.value {
+			t.Errorf("DecodeBytes(%X) = %d, want %d", v.enc, got, v.value)
+		}
+		if n != len(v.enc) {
+			t.Errorf("DecodeBytes(%X) consumed %d bytes, want %d", v.enc, n, len(v.enc))
+		}
+	}
+}
+
+func TestDecodeBytesExactConsumption(t *testing.T) {
+	var packed []byte
+	for _, v := range testVectors {
+		packed = append(packed, v.enc...)
+	}
+	pos := 0
+	for _, v := range testVectors {
+		got, n, err := bijou64.DecodeBytes(packed[pos:])
+		if err != nil {
+			t.Fatalf("value %d: unexpected error %v", v.value, err)
+		}
+		if got != v.value {
+			t.Fatalf("value %d: got %d", v.value, got)
+		}
+		pos += n
+	}
+	if pos != len(packed) {
+		t.Fatalf("%d unexpected bytes remaining", len(packed)-pos)
+	}
+}
+
+func TestDecodeBytesErrorVectors(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		_, _, err := bijou64.DecodeBytes(nil)
+		if err != bijou64.ErrBufferTooShort {
+			t.Errorf("empty input: got %v, want ErrBufferTooShort", err)
+		}
+	})
+	t.Run("truncated", func(t *testing.T) {
+		_, _, err := bijou64.DecodeBytes([]byte{0xF9, 0x00})
+		if err != bijou64.ErrBufferTooShort {
+			t.Errorf("truncated: got %v, want ErrBufferTooShort", err)
+		}
+	})
+	t.Run("overflow", func(t *testing.T) {
+		_, _, err := bijou64.DecodeBytes([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+		if err != bijou64.ErrOverflow {
+			t.Errorf("overflow: got %v, want ErrOverflow", err)
+		}
+	})
+}
+
 func TestErrorVectors(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		_, err := bijou64.DecodeU64(bytes.NewReader(nil))
@@ -135,18 +193,6 @@ func FuzzRoundTrip(f *testing.F) {
 		}
 	})
 }
-
-// packedBench is a mixed-tier buffer used by BenchmarkDecodePacked.
-var packedBench = func() []byte {
-	vals := []uint64{0, 42, 247, 300, 67000, 4311810551, 72340172838076920, 18446744073709551615}
-	var b []byte
-	for _, v := range vals {
-		b = bijou64.AppendU64(b, v)
-	}
-	return b
-}()
-
-var packedBenchCount = 8
 
 func BenchmarkEncodeSmall(b *testing.B) {
 	buf := make([]byte, 0, 9)
@@ -193,6 +239,18 @@ func BenchmarkDecodeLarge(b *testing.B) {
 	}
 }
 
+// packedBench is a mixed-tier buffer used by BenchmarkDecodePacked.
+var packedBench = func() []byte {
+	vals := []uint64{0, 42, 247, 300, 67000, 4311810551, 72340172838076920, 18446744073709551615}
+	var b []byte
+	for _, v := range vals {
+		b = bijou64.AppendU64(b, v)
+	}
+	return b
+}()
+
+var packedBenchCount = 8
+
 // BenchmarkDecodePacked measures the realistic case: many values packed
 // consecutively in a single buffer, decoded sequentially.
 func BenchmarkDecodePacked(b *testing.B) {
@@ -201,6 +259,38 @@ func BenchmarkDecodePacked(b *testing.B) {
 		r.Seek(0, io.SeekStart)
 		for range packedBenchCount {
 			bijou64.DecodeU64(r)
+		}
+	}
+}
+
+func BenchmarkDecodeBytesSmall(b *testing.B) {
+	buf := []byte{0x2A}
+	for b.Loop() {
+		bijou64.DecodeBytes(buf)
+	}
+}
+
+func BenchmarkDecodeBytesmid(b *testing.B) {
+	buf := []byte{0xFA, 0x00, 0x03, 0xC0}
+	for b.Loop() {
+		bijou64.DecodeBytes(buf)
+	}
+}
+
+func BenchmarkDecodeBytesLarge(b *testing.B) {
+	buf := []byte{0xFF, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0x07}
+	for b.Loop() {
+		bijou64.DecodeBytes(buf)
+	}
+}
+
+// BenchmarkDecodeBytesPacked is the realistic slice-based case.
+func BenchmarkDecodeBytesPacked(b *testing.B) {
+	for b.Loop() {
+		pos := 0
+		for pos < len(packedBench) {
+			_, n, _ := bijou64.DecodeBytes(packedBench[pos:])
+			pos += n
 		}
 	}
 }
