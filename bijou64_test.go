@@ -1,4 +1,4 @@
-package bijou64_test
+package bijou_test
 
 import (
 	"bytes"
@@ -6,11 +6,11 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/MichaelMure/go-bijou64"
+	"github.com/MichaelMure/go-bijou"
 )
 
-// testVectors are the positive test vectors from the bijou64 spec:
-// https://github.com/inkandswitch/bijou/blob/main/bijou64/SPEC.md#test-vectors
+// testVectors are the positive test vectors from the bijou spec:
+// https://github.com/inkandswitch/bijou/blob/main/bijou/SPEC.md#test-vectors
 var testVectors = []struct {
 	value uint64
 	enc   []byte
@@ -37,7 +37,7 @@ var testVectors = []struct {
 
 func TestEncodeVectors(t *testing.T) {
 	for _, v := range testVectors {
-		got := bijou64.EncodeU64(v.value)
+		got := bijou.EncodeU64(v.value)
 		if !bytes.Equal(got, v.enc) {
 			t.Errorf("EncodeU64(%d) = %X, want %X", v.value, got, v.enc)
 		}
@@ -47,7 +47,7 @@ func TestEncodeVectors(t *testing.T) {
 func TestDecodeVectors(t *testing.T) {
 	for _, v := range testVectors {
 		r := bytes.NewReader(v.enc)
-		got, err := bijou64.DecodeU64(r)
+		got, err := bijou.DecodeU64(r)
 		if err != nil {
 			t.Errorf("DecodeU64(%X) error: %v", v.enc, err)
 			continue
@@ -60,7 +60,7 @@ func TestDecodeVectors(t *testing.T) {
 
 func TestDecodeBytesVectors(t *testing.T) {
 	for _, v := range testVectors {
-		got, n, err := bijou64.DecodeBytes(v.enc)
+		got, n, err := bijou.DecodeBytes(v.enc)
 		if err != nil {
 			t.Errorf("DecodeBytes(%X) error: %v", v.enc, err)
 			continue
@@ -76,9 +76,9 @@ func TestDecodeBytesVectors(t *testing.T) {
 
 func TestRoundTrip(t *testing.T) {
 	for _, v := range testVectors {
-		buf := bijou64.AppendU64(nil, v.value)
+		buf := bijou.AppendU64(nil, v.value)
 		r := bytes.NewReader(buf)
-		got, err := bijou64.DecodeU64(r)
+		got, err := bijou.DecodeU64(r)
 		if err != nil {
 			t.Errorf("round-trip %d: %v", v.value, err)
 			continue
@@ -99,7 +99,7 @@ func TestDecodeExactConsumption(t *testing.T) {
 	}
 	r := bytes.NewReader(packed)
 	for _, v := range testVectors {
-		got, err := bijou64.DecodeU64(r)
+		got, err := bijou.DecodeU64(r)
 		if err != nil {
 			t.Fatalf("value %d: unexpected error %v", v.value, err)
 		}
@@ -119,7 +119,7 @@ func TestDecodeBytesExactConsumption(t *testing.T) {
 	}
 	pos := 0
 	for _, v := range testVectors {
-		got, n, err := bijou64.DecodeBytes(packed[pos:])
+		got, n, err := bijou.DecodeBytes(packed[pos:])
 		if err != nil {
 			t.Fatalf("value %d: unexpected error %v", v.value, err)
 		}
@@ -135,20 +135,20 @@ func TestDecodeBytesExactConsumption(t *testing.T) {
 
 func TestDecodeBytesErrorVectors(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		_, _, err := bijou64.DecodeBytes(nil)
-		if err != bijou64.ErrBufferTooShort {
+		_, _, err := bijou.DecodeBytes(nil)
+		if err != bijou.ErrBufferTooShort {
 			t.Errorf("empty input: got %v, want ErrBufferTooShort", err)
 		}
 	})
 	t.Run("truncated", func(t *testing.T) {
-		_, _, err := bijou64.DecodeBytes([]byte{0xF9, 0x00})
-		if err != bijou64.ErrBufferTooShort {
+		_, _, err := bijou.DecodeBytes([]byte{0xF9, 0x00})
+		if err != bijou.ErrBufferTooShort {
 			t.Errorf("truncated: got %v, want ErrBufferTooShort", err)
 		}
 	})
 	t.Run("overflow", func(t *testing.T) {
-		_, _, err := bijou64.DecodeBytes([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
-		if err != bijou64.ErrOverflow {
+		_, _, err := bijou.DecodeBytes([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+		if err != bijou.ErrOverflow {
 			t.Errorf("overflow: got %v, want ErrOverflow", err)
 		}
 	})
@@ -156,20 +156,20 @@ func TestDecodeBytesErrorVectors(t *testing.T) {
 
 func TestErrorVectors(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		_, err := bijou64.DecodeU64(bytes.NewReader(nil))
+		_, err := bijou.DecodeU64(bytes.NewReader(nil))
 		if err != io.EOF {
 			t.Errorf("empty input: got %v, want io.EOF", err)
 		}
 	})
 	t.Run("truncated", func(t *testing.T) {
-		_, err := bijou64.DecodeU64(bytes.NewReader([]byte{0xF9, 0x00}))
-		if err != bijou64.ErrBufferTooShort {
+		_, err := bijou.DecodeU64(bytes.NewReader([]byte{0xF9, 0x00}))
+		if err != bijou.ErrBufferTooShort {
 			t.Errorf("truncated: got %v, want ErrBufferTooShort", err)
 		}
 	})
 	t.Run("overflow", func(t *testing.T) {
-		_, err := bijou64.DecodeU64(bytes.NewReader([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}))
-		if err != bijou64.ErrOverflow {
+		_, err := bijou.DecodeU64(bytes.NewReader([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}))
+		if err != bijou.ErrOverflow {
 			t.Errorf("overflow: got %v, want ErrOverflow", err)
 		}
 	})
@@ -183,11 +183,11 @@ func FuzzRoundTrip(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, data []byte) {
 		r := bytes.NewReader(data)
-		v, err := bijou64.DecodeU64(r)
+		v, err := bijou.DecodeU64(r)
 		if err != nil {
 			return
 		}
-		got := bijou64.EncodeU64(v)
+		got := bijou.EncodeU64(v)
 		if !bytes.Equal(got, data[:len(data)-r.Len()]) {
 			t.Fatalf("round-trip failed: decoded %d, re-encoded to %X, original %X",
 				v, got, data[:len(data)-r.Len()])
@@ -198,7 +198,7 @@ func FuzzRoundTrip(f *testing.F) {
 // ---------------------------------------------------------------------------
 // Benchmark distributions — mirror the Rust shootout benchmarks exactly:
 // same ranges, same batch size (4096), same fixed seed.
-// https://github.com/inkandswitch/bijou/blob/main/bijou64/benches/shootout.rs
+// https://github.com/inkandswitch/bijou/blob/main/bijou/benches/shootout.rs
 // ---------------------------------------------------------------------------
 
 const benchBatch = 4096
@@ -276,7 +276,7 @@ func preEncode(values []uint64) (buf []byte, offsets []int) {
 	offsets = make([]int, len(values))
 	for i, v := range values {
 		offsets[i] = len(buf)
-		buf = bijou64.AppendU64(buf, v)
+		buf = bijou.AppendU64(buf, v)
 	}
 	return
 }
@@ -290,7 +290,7 @@ func benchEncode(b *testing.B, values []uint64) {
 	for b.Loop() {
 		buf = buf[:0]
 		for _, v := range values {
-			buf = bijou64.AppendU64(buf, v)
+			buf = bijou.AppendU64(buf, v)
 		}
 	}
 }
@@ -313,7 +313,7 @@ func benchDecode(b *testing.B, values []uint64) {
 	for b.Loop() {
 		sum = 0
 		for _, off := range offsets {
-			v, _, _ := bijou64.DecodeBytes(buf[off:])
+			v, _, _ := bijou.DecodeBytes(buf[off:])
 			sum += v
 		}
 	}
@@ -339,7 +339,7 @@ func benchStreamDecode(b *testing.B, values []uint64) {
 		sum = 0
 		pos := 0
 		for pos < len(buf) {
-			v, n, _ := bijou64.DecodeBytes(buf[pos:])
+			v, n, _ := bijou.DecodeBytes(buf[pos:])
 			sum += v
 			pos += n
 		}
@@ -367,7 +367,7 @@ func benchStreamDecodeU64(b *testing.B, values []uint64) {
 		r.Seek(0, 0)
 		sum = 0
 		for r.Len() > 0 {
-			v, _ := bijou64.DecodeU64(r)
+			v, _ := bijou.DecodeU64(r)
 			sum += v
 		}
 	}
@@ -390,7 +390,7 @@ func benchEncodedLen(b *testing.B, values []uint64) {
 	for b.Loop() {
 		total = 0
 		for _, v := range values {
-			total += bijou64.EncodedLen(v)
+			total += bijou.EncodedLen(v)
 		}
 	}
 	_ = total

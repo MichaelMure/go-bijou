@@ -1,3 +1,3 @@
-module github.com/MichaelMure/go-bijou64
+module github.com/MichaelMure/go-bijou
 
-go 1.25.8
+go 1.24

@@ -1,11 +1,11 @@
-// Package bijou64 implements bijou64 encoding for unsigned 64-bit integers.
+// Package bijou implements bijou64 encoding for unsigned 64-bit integers.
 //
 // bijou64 is a bijective variable-length encoding that uses 1–9 bytes.
 // Every value has exactly one encoding, enforced structurally by per-tier
 // offset arithmetic rather than runtime canonicality checks.
 //
 // See https://github.com/inkandswitch/bijou/blob/main/bijou64/SPEC.md
-package bijou64
+package bijou
 
 import (
 	"errors"
@@ -108,7 +108,7 @@ func DecodeBytes(buf []byte) (uint64, int, error) {
 		return uint64(tag), 1, nil
 	}
 
-	tier := int(tag - 0xF7) // 0xF8→1, 0xF9→2, …, 0xFF→8
+	tier := int(tag - 0xF7) // 0xF8-->1, 0xF9-->2, ..., 0xFF-->8
 	if len(buf) < 1+tier {
 		return 0, 0, ErrBufferTooShort
 	}
@@ -143,7 +143,7 @@ func DecodeBytes(buf []byte) (uint64, int, error) {
 
 // DecodeU64 reads a bijou64-encoded value from r and returns it.
 // Returns io.EOF if r is empty, ErrBufferTooShort if the payload is truncated,
-// or ErrOverflow if the tier-8 value exceeds u64::MAX.
+// or ErrOverflow if the tier-8 value exceeds math.MaxUint64.
 func DecodeU64(r io.ByteReader) (uint64, error) {
 	tag, err := r.ReadByte()
 	if err != nil {
@@ -153,7 +153,7 @@ func DecodeU64(r io.ByteReader) (uint64, error) {
 		return uint64(tag), nil
 	}
 
-	tier := int(tag - 0xF7) // 0xF8→1, 0xF9→2, …, 0xFF→8
+	tier := int(tag - 0xF7) // 0xF8-->1, 0xF9-->2, ..., 0xFF-->8
 	var payload uint64
 	for i := 0; i < tier; i++ {
 		b, err := r.ReadByte()

@@ -1,0 +1,28 @@
+on: [push, pull_request]
+name: Go Test
+
+jobs:
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ "ubuntu" ]
+        go: [ "go.mod", "stable" ]
+    env:
+      COVERAGES: ""
+    runs-on: ${{ matrix.os }}-latest
+    name: ${{ matrix.os}} (go ${{ matrix.go }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go != 'go.mod' && matrix.go || '' }}
+          go-version-file: ${{ matrix.go == 'go.mod' && 'go.mod' || '' }}
+      - name: Go information
+        run: |
+          go version
+          go env
+      - name: Run tests
+        run: go test -v ./...
+      - name: Check formatted
+        run: gofmt -l .
