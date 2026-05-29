@@ -71,6 +71,30 @@ func EncodeU64(v uint64) []byte {
 	return AppendU64(make([]byte, 0, 9), v)
 }
 
+// EncodedLen returns the number of bytes required to encode v.
+func EncodedLen(v uint64) int {
+	switch {
+	case v < offset1:
+		return 1
+	case v < offset2:
+		return 2
+	case v < offset3:
+		return 3
+	case v < offset4:
+		return 4
+	case v < offset5:
+		return 5
+	case v < offset6:
+		return 6
+	case v < offset7:
+		return 7
+	case v < offset8:
+		return 8
+	default:
+		return 9
+	}
+}
+
 // DecodeBytes decodes a bijou64-encoded value from buf.
 // Returns the value, the number of bytes consumed, and any error.
 // Prefer this over DecodeU64 when decoding from a []byte — it avoids

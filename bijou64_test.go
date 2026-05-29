@@ -3,6 +3,7 @@ package bijou64_test
 import (
 	"bytes"
 	"io"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/MichaelMure/go-bijou64"
@@ -57,6 +58,22 @@ func TestDecodeVectors(t *testing.T) {
 	}
 }
 
+func TestDecodeBytesVectors(t *testing.T) {
+	for _, v := range testVectors {
+		got, n, err := bijou64.DecodeBytes(v.enc)
+		if err != nil {
+			t.Errorf("DecodeBytes(%X) error: %v", v.enc, err)
+			continue
+		}
+		if got != v.value {
+			t.Errorf("DecodeBytes(%X) = %d, want %d", v.enc, got, v.value)
+		}
+		if n != len(v.enc) {
+			t.Errorf("DecodeBytes(%X) consumed %d bytes, want %d", v.enc, n, len(v.enc))
+		}
+	}
+}
+
 func TestRoundTrip(t *testing.T) {
 	for _, v := range testVectors {
 		buf := bijou64.AppendU64(nil, v.value)
@@ -92,22 +109,6 @@ func TestDecodeExactConsumption(t *testing.T) {
 	}
 	if r.Len() != 0 {
 		t.Fatalf("%d unexpected bytes remaining in buffer", r.Len())
-	}
-}
-
-func TestDecodeBytesVectors(t *testing.T) {
-	for _, v := range testVectors {
-		got, n, err := bijou64.DecodeBytes(v.enc)
-		if err != nil {
-			t.Errorf("DecodeBytes(%X) error: %v", v.enc, err)
-			continue
-		}
-		if got != v.value {
-			t.Errorf("DecodeBytes(%X) = %d, want %d", v.enc, got, v.value)
-		}
-		if n != len(v.enc) {
-			t.Errorf("DecodeBytes(%X) consumed %d bytes, want %d", v.enc, n, len(v.enc))
-		}
 	}
 }
 
@@ -194,103 +195,183 @@ func FuzzRoundTrip(f *testing.F) {
 	})
 }
 
-func BenchmarkEncodeSmall(b *testing.B) {
-	buf := make([]byte, 0, 9)
-	for b.Loop() {
-		buf = bijou64.AppendU64(buf[:0], 42)
-	}
+// ---------------------------------------------------------------------------
+// Benchmark distributions — mirror the Rust shootout benchmarks exactly:
+// same ranges, same batch size (4096), same fixed seed.
+// https://github.com/inkandswitch/bijou/blob/main/bijou64/benches/shootout.rs
+// ---------------------------------------------------------------------------
+
+const benchBatch = 4096
+const benchSeed = 0xBEEFCAFEDEADF00D
+
+func makeRNG() *rand.Rand {
+	return rand.New(rand.NewPCG(benchSeed, 0))
 }
 
-func BenchmarkEncodeMid(b *testing.B) {
-	buf := make([]byte, 0, 9)
-	for b.Loop() {
-		buf = bijou64.AppendU64(buf[:0], 67000)
+func tinyValues() []uint64 {
+	rng := makeRNG()
+	vals := make([]uint64, benchBatch)
+	for i := range vals {
+		vals[i] = rng.Uint64N(248) // 0–247
 	}
+	return vals
 }
 
-func BenchmarkEncodeLarge(b *testing.B) {
-	buf := make([]byte, 0, 9)
-	for b.Loop() {
-		buf = bijou64.AppendU64(buf[:0], 18446744073709551615)
+func smallValues() []uint64 {
+	rng := makeRNG()
+	vals := make([]uint64, benchBatch)
+	for i := range vals {
+		vals[i] = 248 + rng.Uint64N(65535-248+1) // 248–65535
 	}
+	return vals
 }
 
-func BenchmarkDecodeSmall(b *testing.B) {
-	r := bytes.NewReader([]byte{0x2A})
-	for b.Loop() {
-		r.Seek(0, io.SeekStart)
-		bijou64.DecodeU64(r)
+func mediumValues() []uint64 {
+	rng := makeRNG()
+	vals := make([]uint64, benchBatch)
+	for i := range vals {
+		vals[i] = 65536 + rng.Uint64N(uint64(^uint32(0))-65536+1) // 65536–4294967295
 	}
+	return vals
 }
 
-func BenchmarkDecodeMid(b *testing.B) {
-	r := bytes.NewReader([]byte{0xFA, 0x00, 0x03, 0xC0})
-	for b.Loop() {
-		r.Seek(0, io.SeekStart)
-		bijou64.DecodeU64(r)
+func largeValues() []uint64 {
+	rng := makeRNG()
+	vals := make([]uint64, benchBatch)
+	for i := range vals {
+		vals[i] = uint64(^uint32(0)) + 1 + rng.Uint64N(^uint64(0)-(uint64(^uint32(0))+1)+1) // >4G
 	}
+	return vals
 }
 
-func BenchmarkDecodeLarge(b *testing.B) {
-	r := bytes.NewReader([]byte{0xFF, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0x07})
-	for b.Loop() {
-		r.Seek(0, io.SeekStart)
-		bijou64.DecodeU64(r)
+func uniformValues() []uint64 {
+	rng := makeRNG()
+	vals := make([]uint64, benchBatch)
+	for i := range vals {
+		vals[i] = rng.Uint64()
 	}
+	return vals
 }
 
-// packedBench is a mixed-tier buffer used by BenchmarkDecodePacked.
-var packedBench = func() []byte {
-	vals := []uint64{0, 42, 247, 300, 67000, 4311810551, 72340172838076920, 18446744073709551615}
-	var b []byte
-	for _, v := range vals {
-		b = bijou64.AppendU64(b, v)
+func boundaryValues() []uint64 {
+	boundaries := []uint64{
+		0, 247, 248, 503, 504,
+		66_039, 66_040, 16_843_255, 16_843_256,
+		4_311_810_551, 4_311_810_552,
+		1_103_823_438_327, 1_103_823_438_328,
+		282_578_800_148_983, 282_578_800_148_984,
+		72_340_172_838_076_919, 72_340_172_838_076_920,
+		^uint64(0),
 	}
-	return b
-}()
+	vals := make([]uint64, benchBatch)
+	for i := range vals {
+		vals[i] = boundaries[i%len(boundaries)]
+	}
+	return vals
+}
 
-var packedBenchCount = 8
+// preEncode returns a packed buffer and per-value byte offsets.
+func preEncode(values []uint64) (buf []byte, offsets []int) {
+	buf = make([]byte, 0, len(values)*5)
+	offsets = make([]int, len(values))
+	for i, v := range values {
+		offsets[i] = len(buf)
+		buf = bijou64.AppendU64(buf, v)
+	}
+	return
+}
 
-// BenchmarkDecodePacked measures the realistic case: many values packed
-// consecutively in a single buffer, decoded sequentially.
-func BenchmarkDecodePacked(b *testing.B) {
-	r := bytes.NewReader(packedBench)
+// ---------------------------------------------------------------------------
+// Encode benchmarks — one batch per b.Loop iteration; ns/op ÷ 4096 = ns/value
+// ---------------------------------------------------------------------------
+
+func benchEncode(b *testing.B, values []uint64) {
+	buf := make([]byte, 0, len(values)*9)
 	for b.Loop() {
-		r.Seek(0, io.SeekStart)
-		for range packedBenchCount {
-			bijou64.DecodeU64(r)
+		buf = buf[:0]
+		for _, v := range values {
+			buf = bijou64.AppendU64(buf, v)
 		}
 	}
 }
 
-func BenchmarkDecodeBytesSmall(b *testing.B) {
-	buf := []byte{0x2A}
+func BenchmarkEncodeTiny(b *testing.B)    { benchEncode(b, tinyValues()) }
+func BenchmarkEncodeSmall(b *testing.B)   { benchEncode(b, smallValues()) }
+func BenchmarkEncodeMedium(b *testing.B)  { benchEncode(b, mediumValues()) }
+func BenchmarkEncodeLarge(b *testing.B)   { benchEncode(b, largeValues()) }
+func BenchmarkEncodeBoundary(b *testing.B) { benchEncode(b, boundaryValues()) }
+func BenchmarkEncodeUniform(b *testing.B) { benchEncode(b, uniformValues()) }
+
+// ---------------------------------------------------------------------------
+// Decode benchmarks — random access via pre-computed offsets; matches
+// Rust's bench_decode which also uses per-value offset tables.
+// ---------------------------------------------------------------------------
+
+func benchDecode(b *testing.B, values []uint64) {
+	buf, offsets := preEncode(values)
+	var sum uint64
 	for b.Loop() {
-		bijou64.DecodeBytes(buf)
+		sum = 0
+		for _, off := range offsets {
+			v, _, _ := bijou64.DecodeBytes(buf[off:])
+			sum += v
+		}
 	}
+	_ = sum
 }
 
-func BenchmarkDecodeBytesmid(b *testing.B) {
-	buf := []byte{0xFA, 0x00, 0x03, 0xC0}
-	for b.Loop() {
-		bijou64.DecodeBytes(buf)
-	}
-}
+func BenchmarkDecodeTiny(b *testing.B)    { benchDecode(b, tinyValues()) }
+func BenchmarkDecodeSmall(b *testing.B)   { benchDecode(b, smallValues()) }
+func BenchmarkDecodeMedium(b *testing.B)  { benchDecode(b, mediumValues()) }
+func BenchmarkDecodeLarge(b *testing.B)   { benchDecode(b, largeValues()) }
+func BenchmarkDecodeBoundary(b *testing.B) { benchDecode(b, boundaryValues()) }
+func BenchmarkDecodeUniform(b *testing.B) { benchDecode(b, uniformValues()) }
 
-func BenchmarkDecodeBytesLarge(b *testing.B) {
-	buf := []byte{0xFF, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0x07}
-	for b.Loop() {
-		bijou64.DecodeBytes(buf)
-	}
-}
+// ---------------------------------------------------------------------------
+// Stream decode benchmarks — sequential decode advancing through the buffer;
+// matches Rust's bench_stream_decode.
+// ---------------------------------------------------------------------------
 
-// BenchmarkDecodeBytesPacked is the realistic slice-based case.
-func BenchmarkDecodeBytesPacked(b *testing.B) {
+func benchStreamDecode(b *testing.B, values []uint64) {
+	buf, _ := preEncode(values)
+	var sum uint64
 	for b.Loop() {
+		sum = 0
 		pos := 0
-		for pos < len(packedBench) {
-			_, n, _ := bijou64.DecodeBytes(packedBench[pos:])
+		for pos < len(buf) {
+			v, n, _ := bijou64.DecodeBytes(buf[pos:])
+			sum += v
 			pos += n
 		}
 	}
+	_ = sum
 }
+
+func BenchmarkStreamDecodeTiny(b *testing.B)    { benchStreamDecode(b, tinyValues()) }
+func BenchmarkStreamDecodeSmall(b *testing.B)   { benchStreamDecode(b, smallValues()) }
+func BenchmarkStreamDecodeMedium(b *testing.B)  { benchStreamDecode(b, mediumValues()) }
+func BenchmarkStreamDecodeLarge(b *testing.B)   { benchStreamDecode(b, largeValues()) }
+func BenchmarkStreamDecodeBoundary(b *testing.B) { benchStreamDecode(b, boundaryValues()) }
+func BenchmarkStreamDecodeUniform(b *testing.B) { benchStreamDecode(b, uniformValues()) }
+
+// ---------------------------------------------------------------------------
+// Encoded size benchmarks — matches Rust's bench_encoded_size.
+// ---------------------------------------------------------------------------
+
+func benchEncodedLen(b *testing.B, values []uint64) {
+	var total int
+	for b.Loop() {
+		total = 0
+		for _, v := range values {
+			total += bijou64.EncodedLen(v)
+		}
+	}
+	_ = total
+}
+
+func BenchmarkEncodedLenTiny(b *testing.B)    { benchEncodedLen(b, tinyValues()) }
+func BenchmarkEncodedLenSmall(b *testing.B)   { benchEncodedLen(b, smallValues()) }
+func BenchmarkEncodedLenMedium(b *testing.B)  { benchEncodedLen(b, mediumValues()) }
+func BenchmarkEncodedLenLarge(b *testing.B)   { benchEncodedLen(b, largeValues()) }
+func BenchmarkEncodedLenBoundary(b *testing.B) { benchEncodedLen(b, boundaryValues()) }
+func BenchmarkEncodedLenUniform(b *testing.B) { benchEncodedLen(b, uniformValues()) }
