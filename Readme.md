@@ -8,6 +8,9 @@
     <a href="https://github.com/MichaelMure/go-bijou/actions?query=">
       <img src="https://github.com/MichaelMure/go-bijou/actions/workflows/gotest.yml/badge.svg" alt="Build Status">
     </a>
+    <a href="https://MichaelMure.github.io/go-bijou/dev/bench/">
+        <img alt="Go benchmarks" src="https://img.shields.io/badge/Benchmarks-go-blue">
+    </a>
     <a href="https://github.com/MichaelMure/go-bijou/blob/master/LICENSE">
         <img alt="MIT License" src="https://img.shields.io/badge/License-MIT-green">
     </a>
